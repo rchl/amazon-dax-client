@@ -20,6 +20,11 @@ const MIN_ERROR_COUNT_FOR_UNHEALTHY = 5;
 /** A backend service destination. */
 class Backend {
   constructor(cluster, serviceEndpoint, maxPendingConnectionPerHost) {
+    // Enforce service endpoint override, if the cluster endpoint is a proxy.
+    if (process.env.DAX_ENDPOINT) {
+      serviceEndpoint.address = process.env.DAX_ENDPOINT.split(':')[0];
+    }
+
     this.errorCount = 0;
     this._cluster = cluster;
     this._config = serviceEndpoint;
