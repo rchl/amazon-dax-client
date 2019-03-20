@@ -212,6 +212,7 @@ class SocketTubePool {
       // open tube is available, so use it
       this._headTube = tube._nextTube;
       tube._nextTube = null;
+
       if(tube.socket) {
         // remove the idle handler
         tube.socket.removeAllListeners('timeout');
@@ -221,14 +222,18 @@ class SocketTubePool {
         tube._inPool = false;
       }
 
-      return Promise.resolve(tube);
-    } else {
-      // no open, available tubes, so try to create one
-      let wait = new ControllablePromise(this._connectTimeout, new TimeoutError(this._connectTimeout));
-      this._pendingJob.push(wait);
-      this._alloc();
-      return wait;
+      if(tube.socket && tube.socket.destroyed) {
+        this.reset(tube);
+      } else {
+        return Promise.resolve(tube);
+      }
     }
+
+    // no open, available tubes, so try to create one
+    let wait = new ControllablePromise(this._connectTimeout, new TimeoutError(this._connectTimeout));
+    this._pendingJob.push(wait);
+    this._alloc();
+    return wait;
   }
 
   _alloc() {
