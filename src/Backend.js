@@ -28,10 +28,11 @@ try {
 class Backend {
   constructor(cluster, serviceEndpoint, maxPendingConnectionPerHost) {
     // Enforce service endpoint override, if the cluster endpoint is a proxy.
-    if (process.env.DAX_ENDPOINT) {
-      serviceEndpoint.port = portMap[serviceEndpoint.address] || serviceEndpoint.port;
-      serviceEndpoint.address = process.env.DAX_ENDPOINT.split(':')[0];
-    }
+    // DISABLED because we now places lambda's in the VPC itself.
+    // if (process.env.DAX_ENDPOINT) {
+    //   serviceEndpoint.port = portMap[serviceEndpoint.address] || serviceEndpoint.port;
+    //   serviceEndpoint.address = process.env.DAX_ENDPOINT.split(':')[0];
+    // }
 
     this.errorCount = 0;
     this._cluster = cluster;
