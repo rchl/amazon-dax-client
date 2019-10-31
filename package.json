@@ -43,7 +43,7 @@
     "chai": "~3.5.0",
     "chai-as-promised": "~6.0.0",
     "console.table": "^0.10.0",
-    "eslint": "^3.19.0",
+    "eslint": "^6.6.0",
     "eslint-config-scanjs": "github:mozfreddyb/eslint-config-scanjs",
     "eslint-plugin-no-unsafe-innerhtml": "^1.0.16",
     "mocha": "^5.2.0",
