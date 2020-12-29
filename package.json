@@ -53,7 +53,7 @@
   },
   "dependencies": {
     "antlr4": "^4.7.0",
-    "aws-sdk": ">=2.365.0",
+    "aws-sdk": ">=2.818.0",
     "bignumber.js": "^3.0.0",
     "jmespath": "^0.15.0",
     "uuid": "^3.3.2"
