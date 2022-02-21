@@ -34,11 +34,15 @@ class Router {
 
   /**
    * Returns the next leader entry that is not the given prev value if one such entry is available.
-   * If there is only one entry and that is equals to prev, prev is returned.
+   * If there is only one entry and that is equals to prev, return a different non-leader entry, otherwise prev is returned.
    * Returns null if nothing is available.
    */
   nextLeader(prev) {
-    return this._next(prev, this._leaderCnt);
+    let next = this._next(prev, this._leaderCnt);
+    if(!next || next === prev) {
+      return this.nextAny(prev);
+    }
+    return next;
   }
 
   /**

@@ -71,9 +71,7 @@ class ByteStreamBuffer {
     // copy to a result buffer
     // because of buffer reuse, a slice may get overwritten and cause
     // hard-to-find bugs (ask me how I know...)
-    let result = new Buffer(resultSlice.length);
-    resultSlice.copy(result);
-    return result;
+    return Buffer.from(resultSlice);
   }
 
   readAsString(num, encoding) {

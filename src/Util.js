@@ -17,6 +17,10 @@ const ALPHABET = '0123456789abcdef';
 const DaxClientError = require('./DaxClientError');
 const DaxErrorCode = require('./DaxErrorCode');
 
+const ENCRYPTED_SCHEME = 'daxs';
+const UNENCRYPTED_SCHEME = 'dax';
+const SCHEMES_TO_PORTS = {[UNENCRYPTED_SCHEME]: 8111, [ENCRYPTED_SCHEME]: 9111};
+
 class Util {
   static convertBase(str, baseIn, baseOut) {
     if(str[0] === '-') {
@@ -71,6 +75,10 @@ class Util {
   }
 
   static parseHostPorts(hostports) {
+    if(hostports == null || hostports == '') {
+      throw new DaxClientError('Provide a Cluster Discovery Endpoint to connect.');
+    }
+
     // Handle the case of a single string
     if(typeof hostports === 'string') {
       return [Util.parseHostPort(hostports)];
@@ -80,23 +88,51 @@ class Util {
     for(let hostport of hostports) {
       addrs.push(Util.parseHostPort(hostport));
     }
+
+    const schemesInAddrs = addrs.map((addr) => addr.scheme);
+    const daxScheme = schemesInAddrs[0];
+    const areAllSchemesTheSame = schemesInAddrs.every((scheme) => scheme == daxScheme);
+    if(!areAllSchemesTheSame) {
+      throw new DaxClientError('Inconsistency between the schemes of provided endpoints.', DaxErrorCode.IllegalArgument, false);
+    }
+
+    if(daxScheme == ENCRYPTED_SCHEME && addrs != null && addrs.length >= 2) {
+      throw new DaxClientError('Only one encrypted endpoint URL is allowed.');
+    }
+
     return addrs;
   }
 
   static parseHostPort(hostport) {
-    let colon = hostport.indexOf(':');
-    if(colon <= 0) {
-      throw new DaxClientError('Invalid hostport:' + hostport, DaxErrorCode.IllegalArgument, false);
+    let url;
+
+    if(hostport.indexOf('://') == -1) { // url has no scheme
+      if(hostport.indexOf(':') == -1) { // url has no port
+        throw new DaxClientError('Invalid hostport: ' + hostport, DaxErrorCode.IllegalArgument, false);
+      }
+      // This scheme assumption exists to support legacy <host>:<port> endpoints.
+      hostport = `${UNENCRYPTED_SCHEME}://${hostport}`;
     }
 
-    let host = hostport.substr(0, colon);
-    let port = hostport.substr(colon + 1);
-    if(isNaN(port)) {
-      throw new DaxClientError('Invalid hostport:' + hostport, DaxErrorCode.IllegalArgument, false);
+    try {
+      url = new URL(hostport);
+    } catch(error) {
+      throw new DaxClientError('Invalid hostport: ' + hostport, DaxErrorCode.IllegalArgument, false);
     }
-    port = parseInt(port);
 
-    return {host: host, port: port};
+    const host = url.hostname;
+    let port = url.port;
+    const scheme = url.protocol.replace(':', ''); // changes `daxs:` to `daxs`
+
+    if(!Object.keys(SCHEMES_TO_PORTS).includes(scheme)) {
+      throw new DaxClientError('URL scheme must be one of: ' + Object.keys(SCHEMES_TO_PORTS), DaxErrorCode.IllegalArgument, false);
+    }
+
+    if(port == '' || port == null) {
+      port = SCHEMES_TO_PORTS[scheme];
+    }
+
+    return {host: host, port: parseInt(port), scheme: scheme};
   }
 
   static objEqual(a, b) {
@@ -238,7 +274,7 @@ class Util {
     }
 
     if(Buffer.isBuffer(obj)) {
-      return new Buffer(obj);
+      return Buffer.from(obj);
     }
 
     let clone = {};
@@ -262,9 +298,9 @@ class Util {
     // (i.e. if only 1 attribute is present the array would [, "value", ] or similar).
     // So we want to iterate over the present indices only
     // A rare case where for...in on an array is exactly what is needed
-    for(let i in attrValues) {
-      item[attrNames[i]] = attrValues[i];
-    }
+    attrValues.forEach((attrValue, index) => {
+      item[attrNames[index]] = attrValue;
+    });
 
     delete item._anonymousAttributeValues;
     delete item._attrListId;
@@ -282,3 +318,5 @@ class Util {
 }
 
 module.exports = Util;
+module.exports.ENCRYPTED_SCHEME = ENCRYPTED_SCHEME;
+module.exports.UNENCRYPTED_SCHEME = UNENCRYPTED_SCHEME;

@@ -50,7 +50,7 @@ class DaxServiceError extends DaxClientError {
                 break;
             }
           }
-
+          break;
         case 37:
           if(codeSeq.length > 3) {
             switch(codeSeq[3]) {
@@ -94,6 +94,7 @@ class DaxServiceError extends DaxClientError {
                 break;
             }
           }
+          break;
       }
     }
 
@@ -114,6 +115,19 @@ class DaxServiceError extends DaxClientError {
     }
 
     switch(this.codeSeq[1]) {
+      case 23:
+        switch(this.codeSeq[2]) {
+          case 31:
+            if(this.codeSeq.length > 3) {
+              switch(this.codeSeq[3]){
+                case 33:
+                  this.retryable = true; // AuthenticationRequiredException
+                  break;
+              }
+            }
+            break;
+        }
+        break;
       case 37:
         if(this.codeSeq.length > 3) {
           switch(this.codeSeq[3]) {
@@ -125,10 +139,12 @@ class DaxServiceError extends DaxClientError {
                   case 49: // LimitExceededException
                   case 58: // TransactionCanceledException
                     this.retryable = true;
+                    break;
                 }
               }
           }
         }
+        break;
     }
   }
 
@@ -138,8 +154,7 @@ class DaxServiceError extends DaxClientError {
 
   _determineTubeValidity() {
     if(this.codeSeq.length >= 4
-      && this.codeSeq[1] === 23 && this.codeSeq[2] === 31
-      && (this.codeSeq[3] >= 32 && this.codeSeq[3] <= 34)) {
+      && this.codeSeq[1] === 23 && this.codeSeq[2] === 31) {
       this._tubeInvalid = true;
     }
   }

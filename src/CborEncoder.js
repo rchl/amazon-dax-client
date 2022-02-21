@@ -52,7 +52,7 @@ class CborEncoder {
     if(typeof data === 'number') {
       this._writeUInt8(data);
     } else {
-      if(length) {
+      if(length !== null && length !== undefined) {
         this._mInOut.write(data, length);
       } else {
         this._mInOut.write(data);

@@ -25,7 +25,6 @@ const NAME_PREFIX = '#key';
 const VALUE_PREFIX = ':val';
 
 class DynamoDBV1Converter {
-
   /**
   * Checks If given DDB request is a V1 request which needs conversion
   */
@@ -102,8 +101,8 @@ class DynamoDBV1Converter {
           if(!DynamoDBV1Converter._isArrayEmpty(request.RequestItems[tableName].AttributesToGet)) {
             request.RequestItems[tableName].ExpressionAttributeNames = {};
             request.RequestItems[tableName].ProjectionExpression = DynamoDBV1Converter._convertAttrToGetToProjExpr(
-            request.RequestItems[tableName].AttributesToGet,
-            request.RequestItems[tableName].ExpressionAttributeNames);
+              request.RequestItems[tableName].AttributesToGet,
+              request.RequestItems[tableName].ExpressionAttributeNames);
           }
         }
         break;
@@ -160,15 +159,15 @@ class DynamoDBV1Converter {
 
         if(!DynamoDBV1Converter._isMapEmpty(request.KeyConditions)) {
           request.KeyConditionExpression = DynamoDBV1Converter._convertConditionsToExpression(request.KeyConditions,
-              'AND', request.ExpressionAttributeNames, request.ExpressionAttributeValues,
-              DaxDataRequestParam.KeyConditionExpression);
+            'AND', request.ExpressionAttributeNames, request.ExpressionAttributeValues,
+            DaxDataRequestParam.KeyConditionExpression);
           delete request.KeyConditions;
         }
 
         if(!DynamoDBV1Converter._isMapEmpty(request.QueryFilter)) {
           request.FilterExpression = DynamoDBV1Converter._convertConditionsToExpression(request.QueryFilter,
-              request.ConditionalOperator, request.ExpressionAttributeNames, request.ExpressionAttributeValues,
-              DaxDataRequestParam.FilterExpression);
+            request.ConditionalOperator, request.ExpressionAttributeNames, request.ExpressionAttributeValues,
+            DaxDataRequestParam.FilterExpression);
           delete request.QueryFilter;
         }
         break;
@@ -215,7 +214,7 @@ class DynamoDBV1Converter {
     let addCondOpDelimiter = false;
     let condOperator = conditionalOperator ? conditionalOperator : 'AND';
 
-    for(const attr in conditions) {
+    Object.keys(conditions).forEach((attr) => {
       if(addCondOpDelimiter) {
         expr+= ' ' + condOperator + ' ';
       } else {
@@ -233,7 +232,7 @@ class DynamoDBV1Converter {
           encodingFn = DynamoDBV1Converter._encodeKeyConditionExpression;
       }
       expr+= encodingFn(attr, conditions[attr], exprAttrNamesMap, exprAttrValsMap);
-    }
+    });
     return expr;
   }
 

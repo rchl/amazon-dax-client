@@ -57,16 +57,14 @@ class Cluster {
     this._requestTimeout = config.requestTimeout || 60000;
     this._healthCheckInterval = config.healthCheckInterval || 5000;
     this._healthCheckTimeout = config.healthCheckTimeout || 1000;
-    this._writeRetries = config.writeRetries || config.writeRetries === 0 ? config.writeRetries : 2;
-    this._readRetries = config.readRetries || config.readRetries === 0 ? config.readRetries : 2;
     this._maxRetryDelay = config.maxRetryDelay || 7000;
     this._threadKeepAlive = config.threadKeepAlive || 10000;
+    this._skipHostnameVerification = config.skipHostnameVerification != null ? config.skipHostnameVerification : false;
     if(config.credentials) {
       this._credProvider = new StaticCredentialProvider(config.credentials);
     } else {
       this._credProvider = (config.credentialProvider ? config.credentialProvider : new AWS.CredentialProviderChain());
     }
-
     this._region = config.region || this._resolveRegion(); // FIXME default region
     this._seeds = config.endpoints ? Util.parseHostPorts(config.endpoints) : (config.endpoint ? Util.parseHostPorts(config.endpoint) : null);
     this._manufacturer = daxManufacturer;
@@ -76,6 +74,7 @@ class Cluster {
     this._daxHealthAgent = new DaxHealthAgent();
     this._pools = new Set();
     this._backends = {};
+    this._startupComplete = false;
   }
 
   _resolveRegion() { // read user's env, should add EC2 metadata in the future
@@ -114,8 +113,12 @@ class Cluster {
     });
   }
 
+  startupComplete() {
+    return this._startupComplete;
+  }
+
   newClient(host, port, session, tube, el) {
-    let pool = new SocketTubePool(host, port, this._credProvider, this._region, IDLE_CONNECTION_REAP_DELAY_MS, this._connectTimeout, tube);
+    let pool = new SocketTubePool(host, port, this._credProvider, this._region, IDLE_CONNECTION_REAP_DELAY_MS, this._connectTimeout, tube, this._seeds, this._skipHostnameVerification);
 
     // Register pool for periodic idle connection reaping.
     this._pools.add(pool);
@@ -168,7 +171,10 @@ class Cluster {
       return;
     }
     this._lastUpdate = now;
-    this._source.refresh(callback);
+    this._source.refresh((err) => {
+      this._startupComplete = true;
+      callback(err);
+    });
   }
 
   update(cfg) {

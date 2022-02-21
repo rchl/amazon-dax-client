@@ -17,22 +17,9 @@ const Util = require('./Util');
 const SessionVersion = require('./SessionVersion');
 const MIN_ERROR_COUNT_FOR_UNHEALTHY = 5;
 
-let portMap = {};
-try {
-  portMap = JSON.parse(process.env.DAX_PORTMAP);
-} catch (error) {
-  console.warn('[amazon-dax-client] ! Failed to JSON parse serviceEndpoint-port mapping.');
-}
-
 /** A backend service destination. */
 class Backend {
   constructor(cluster, serviceEndpoint, maxPendingConnectionPerHost) {
-    // Enforce service endpoint override, if the cluster endpoint is a proxy.
-    if (process.env.DAX_ENDPOINT) {
-      serviceEndpoint.port = portMap[serviceEndpoint.address] || serviceEndpoint.port;
-      serviceEndpoint.address = process.env.DAX_ENDPOINT.split(':')[0];
-    }
-
     this.errorCount = 0;
     this._cluster = cluster;
     this._config = serviceEndpoint;

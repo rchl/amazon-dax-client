@@ -37,7 +37,7 @@ module.exports = class AttributeValueEncoder {
 
     let obj;
     obj = av[ad.AttributeType];
-    if(!obj) {
+    if(obj == null) {
       throw new DaxClientError('One of the required keys was not given a value', DaxErrorCode.Validation, false);
     }
     if(keySchema.length === 2) {
@@ -61,7 +61,7 @@ module.exports = class AttributeValueEncoder {
         throw new DaxClientError('One of the required keys was not given a value', DaxErrorCode.Validation, false);
       }
       obj = av[ad.AttributeType];
-      if(!obj) {
+      if(obj == null) {
         throw new DaxClientError('One of the required keys was not given a value', DaxErrorCode.Validation, false);
       }
       switch(ad.AttributeType) {

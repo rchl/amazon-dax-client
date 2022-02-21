@@ -13,6 +13,18 @@
  * permissions and limitations under the License.
  */
 'use strict';
+
+/**
+ * kerent - 3/29/21
+ * antlr4 v3.8 has a circular dependency bug described here: https://github.com/antlr/antlr4/issues/2834
+ * This issue is resolved in antlr4 v3.9, however, it requires a NodeJS version >= 14.x
+ * The AWS NodeJS SDK currently allows NodeJS version >= 10.x.
+ * At this time, we cannot update our dependencies so we will silence this warning instead of confusing customers.
+ * This fix will prevent us outputting warnings from our dependencies, but not prevent users from seeing warnings that we issue to them.
+ * Note: We should be testing locally with the line commented out so we don't miss warnings from dependencies.
+ */
+process.removeAllListeners('warning');
+
 const EventEmitter = require('events');
 const Cluster = require('./Cluster');
 const DaxClient = require('./DaxClient');
@@ -32,12 +44,20 @@ const _AmazonDaxClient = AWS.util.inherit({
     } else {
       let localConfig = config;
       config = new AWS.Config(AWS.config);
-      config.update(localConfig, true);   // Allow the use of unknown keys
+      config.update(localConfig, true); // Allow the use of unknown keys
     }
     this.config = config;
 
     // no redirects in DAX
     this.config.maxRedirects = 0;
+
+    /*
+     * Skip hostname verification of TLS connections. This has no impact on un-encrypted clusters.
+     * The default is to perform hostname verification, setting this to True will skip verification.
+     * Be sure you understand the implication of turning it off, which is the inability to authenticate the cluster that you are connecting to.
+     * The value for this configuration is a Boolean, either True or False.
+     */
+    this.skipHostnameVerification = config.skipHostnameVerification != null ? config.skipHostnameVerification : false;
 
     // There should be a better way than this, but the SDK API loading methods are internal
     this.api = AWS.util.copy(new AWS.DynamoDB().api);
@@ -260,13 +280,18 @@ class RetryHandler {
     this._maxRetries = retries;
   }
 
-  makeRequestWithRetries(operation, params, clientFactory, retries) {
+  makeRequestWithRetries(operation, params, clientFactory, retries, prevClient) {
+    let newClient;
     return new Promise((resolve, reject) => {
-      let newClient = clientFactory.getClient(null);
+      newClient = clientFactory.getClient(prevClient);
       return resolve(newClient);
     }).then((newClient) => {
       return operation(newClient, params);
     }).catch((err) => {
+      if(this._cluster.startupComplete() === false && err.code === DaxErrorCode.NoRoute) {
+        retries++;
+      }
+
       if(retries <= 0) {
         return Promise.reject(this.check(err));
       }
@@ -286,8 +311,8 @@ class RetryHandler {
       }
 
       const retryHandler = () => {
-        return this._exponentialBackOff(this._maxRetries - retries).then(() => {
-          return this.makeRequestWithRetries(operation, params, clientFactory, retries - 1);
+        return this._exponentialBackOff(err, this._maxRetries - retries).then(() => {
+          return this.makeRequestWithRetries(operation, params, clientFactory, retries - 1, newClient);
         });
       };
       return maybeWait.then(
@@ -296,16 +321,19 @@ class RetryHandler {
     });
   }
 
-  _exponentialBackOff(n) {
+  _exponentialBackOff(err, n) {
+    if(err.code !== DaxErrorCode.Throttling) {
+      return Promise.resolve();
+    }
     return new Promise((resolve, reject) => {
       setTimeout(() => {
         resolve();
-      }, this._jitter(100 << n));
+      }, this._jitter(70 << n));
     });
   }
 
-  _jitter(interval) { // +-10% jitter
-    return interval * (0.9 + Math.random() * 0.2);
+  _jitter(interval) { // jitter between 50% and 100% of interval
+    return interval * (0.5 + Math.random() * 0.5);
   }
 
   waitForRoutesRebuilt() {
@@ -334,30 +362,8 @@ class RetryHandler {
 }
 
 class WriteOperationsRetryHandler extends RetryHandler {
-  constructor(cluster) {
-    super(cluster);
-  }
-
-  waitForRoutesRebuilt() {
-    return this._cluster.waitForRoutesRebuilt(true);
-  }
-
-  /**
-   * Along with all recoverable server errors, wait on connection failures to the leader.
-   * @param {Error} err
-   * @return {boolean}
-   */
-  isWaitForClusterRecoveryBeforeRetrying(err) {
-    if(super.isWaitForClusterRecoveryBeforeRetrying(err)) {
-      return true;
-    }
-    if(err.code === 'ECONNABORTED' || err.code === 'ECONNREFUSED'
-      || err.code === 'ECONNRESET' || err.code === 'ENETRESET'
-      || err.code === 'ETIMEDOUT') {
-      // Connection Error
-      return true;
-    }
-    return false;
+  constructor(cluster, retryDelay, retries) {
+    super(cluster, retryDelay, retries);
   }
 
   isRetryable(err) {

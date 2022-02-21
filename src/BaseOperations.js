@@ -50,7 +50,16 @@ module.exports = class BaseOperations {
   }
 
   _getReturnHandler(tube, assembler, name) {
+    let endListener;
     return new Promise((resolve, reject) => {
+      // Listen on end event to avoid the situation that server close
+      // the connection but client is still waiting for an response
+      // till timeout.
+      endListener = () => {
+        return reject(new DaxClientError('Connection is closed by server', DaxErrorCode.Connection, true));
+      };
+      tube.socket.on('end', endListener);
+
       tube.socket.on('data', (data) => {
         let result;
         try {
@@ -98,7 +107,7 @@ module.exports = class BaseOperations {
         // On socket errors, reset the pool
         this.tubePool.reset(tube);
 
-        return reject(err);
+        return reject(new DaxClientError(err.message, DaxErrorCode.Connection, true));
       });
 
       let timeout = this._requestTimeout; // capture the timeout in case it changes
@@ -107,11 +116,20 @@ module.exports = class BaseOperations {
         this.tubePool.reset(tube);
         return reject(new Tube.TimeoutError(timeout));
       });
-    })
-      .then((result) => {
-        this.tubePool.recycle(tube);
-        return this._resolveAttributeValues(result);
-      });
+    }).then((result) => {
+      // Remove end listener
+      if(endListener) {
+        tube.socket.removeListener('end', endListener);
+      }
+      this.tubePool.recycle(tube);
+      return this._resolveAttributeValues(result);
+    }).catch((err) => {
+      // Remove end listener
+      if(endListener) {
+        tube.socket.removeListener('end', endListener);
+      }
+      throw err;
+    });
   }
 
   reauth(tube) {
@@ -467,9 +485,12 @@ module.exports = class BaseOperations {
   }
 
   prepare_transactWriteItems_N1160037738_1(request) {
-    if(!request.TransactItems) {
+    if(request.TransactItems == null) {
       throw RequestValidator.newValidationException(`1 validation error detected: Value ${JSON.stringify(request.TransactItems)} at 'transactItems' failed to satisfy constraint: Member must not be null`);
+    } else if(request.TransactItems.length < 1) {
+      throw RequestValidator.newValidationException(`1 validation error detected: Value '${request.TransactItems}' at 'transactItems' failed to satisfy constraint: Member must have length greater than or equal to 1`);
     }
+
     let keySetPerTable = {};
     let keysPerTable = {};
     let keysPerRequest = [];
@@ -484,9 +505,6 @@ module.exports = class BaseOperations {
 
     let encoder = new CborEncoder();
 
-    if(request.TransactItems.length < 1) {
-      throw RequestValidator.newValidationException(`1 validation error detected: Value '${request.TransactItems}' at 'transactItems' failed to satisfy constraint: Member must have length greater than or equal to 1`);
-    }
     operationsBuffer.write(encoder.encodeArrayHeader(request.TransactItems.length));
     tableNamesBuffer.write(encoder.encodeArrayHeader(request.TransactItems.length));
     keysBuffer.write(encoder.encodeArrayHeader(request.TransactItems.length));
@@ -502,13 +520,18 @@ module.exports = class BaseOperations {
           throw RequestValidator.newValidationException(`1 validation error detected: Value '${JSON.stringify(request.TransactItems)}' at 'transactItems' failed to satisfy constraint: Member must not be null`);
         }
 
-        let tableName, updateExpr, conditionExpr, rvOnConditionCheckFailure;
+        let tableName;
+        let updateExpr;
+        let conditionExpr;
+        let rvOnConditionCheckFailure;
         let operation;
-        let key, item, eAttrVal;
+        let key;
+        let item;
+        let eAttrVal;
         let eAttrName;
         let opName;
-
         let operations = 0;
+
         if(transactWriteItem.ConditionCheck) {
           operations++;
           let check = transactWriteItem.ConditionCheck;
@@ -578,19 +601,19 @@ module.exports = class BaseOperations {
         RequestValidator.validateTableName(tableName, `transactItems.${i+1}.member.${opName}.tableName`);
         RequestValidator.validateTransactItem(opName === 'put' ? item : key, `transactItems.${i+1}.member.${opName}.${opName === 'put' ? 'item' : 'key'}`);
         RequestValidator.validateExpression(conditionExpr,
-                          updateExpr,   // UpdateExpression
-                          null,   // ProjectionExpression
-                          null, // FilterExpression
-                          null, // key condition expression
-                          null,
-                          null,
-                          null, // AttributeUpdates
-                          null, // AttributesToGet
-                          null,   // query filter
-                          null,   // scan filter
-                          null,   // Key Condition
-                          eAttrName,
-                          eAttrVal);
+          updateExpr, // UpdateExpression
+          null, // ProjectionExpression
+          null, // FilterExpression
+          null, // key condition expression
+          null,
+          null,
+          null, // AttributeUpdates
+          null, // AttributesToGet
+          null, // query filter
+          null, // scan filter
+          null, // Key Condition
+          eAttrName,
+          eAttrVal);
 
         return this.keyCache.get(tableName).then((keySchema) => {
           keysPerTable[tableName] = keySchema;
@@ -742,10 +765,10 @@ module.exports = class BaseOperations {
       validationErrors.push(
         'Value \'' + JSON.stringify(request.TransactItems)
           + '\' at \'transactItems\' failed to satisfy constraint: Member must have length greater than or equal to 1');
-    } else if(request.TransactItems.length > 10) {
+    } else if(request.TransactItems.length > 25) {
       validationErrors.push(
         'Value \'' + JSON.stringify(request.TransactItems)
-          + '\' at \'transactItems\' failed to satisfy constraint: Member must have length less than or equal to 10');
+          + '\' at \'transactItems\' failed to satisfy constraint: Member must have length less than or equal to 25');
     }
 
     for(const [i, item] of request.TransactItems.entries()) {

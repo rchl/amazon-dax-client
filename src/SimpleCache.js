@@ -40,6 +40,9 @@ class SimpleCache {
           this._cache.put(key, val);
           delete this._reqOnFly[key];
           return Promise.resolve(val);
+        }).catch((err) => {
+          delete this._reqOnFly[key];
+          throw err;
         });
         this._reqOnFly[key] = p;
         return p;

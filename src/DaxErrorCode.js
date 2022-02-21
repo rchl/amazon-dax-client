@@ -31,6 +31,7 @@ const DaxErrorCode = {
   ItemCollectionSizeLimitExceeded: 'ItemCollectionSizeLimitExceededException',
   LimitExceeded: 'LimitExceededException',
   Throttling: 'ThrottlingException',
+  Connection: 'ConnectionException',
 };
 
 module.exports = DaxErrorCode;

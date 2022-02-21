@@ -17,11 +17,13 @@
 const CborEncoder = require('./CborEncoder');
 const DaxClientError = require('./DaxClientError');
 const DaxErrorCode = require('./DaxErrorCode');
-const net = require('net');
 const SessionVersion = require('./SessionVersion');
 const SigV4Gen = require('./SigV4Gen');
 const StreamBuffer = require('./ByteStreamBuffer');
 const ControllablePromise = require('./ControllablePromise');
+const {ENCRYPTED_SCHEME} = require('./Util');
+const net = require('net');
+const tls = require('tls');
 
 const MAGIC_STRING = 'J7yne5G';
 const USER_AGENT_STRING = 'UserAgent';
@@ -33,9 +35,9 @@ const DEFAULT_FLUSH_SIZE = 4096;
 
 const MAX_PENDING_CONNECTION = 10; // same number as JAVA client
 
-class TimeoutError extends Error {
+class TimeoutError extends DaxClientError {
   constructor(timeout) {
-    super('Connection timeout after ' + timeout + 'ms');
+    super('Connection timeout after ' + timeout + 'ms', DaxErrorCode.Connection);
   }
 }
 
@@ -188,7 +190,7 @@ class ClientTube {
 }
 
 class SocketTubePool {
-  constructor(hostname, port, credProvider, region, idleTimeout, connectTimeout, tube) {
+  constructor(hostname, port, credProvider, region, idleTimeout, connectTimeout, tube, seeds, skipHostnameVerification) {
     this._hostname = hostname;
     this._port = port;
     this._headTube = null;
@@ -203,6 +205,21 @@ class SocketTubePool {
     this._idleTimeout = idleTimeout || 5000;
     this._connectTimeout = connectTimeout || 10000;
 
+    /**
+     * For client to cluster encryption, the client will only support one encrypted URL.
+     * The scheme must be the same for all endpoints.
+     * Endpoint host is needed for hostname verification of encrypted clusters.
+     */
+    const containsSeed = seeds != null && seeds.length > 0; // This exists because many unit tests don't enumerate seeds.
+    const endpointScheme = containsSeed > 0 ? seeds[0].scheme : null;
+    this._isEncrypted = endpointScheme == ENCRYPTED_SCHEME;
+    this._endpointHost = containsSeed > 0 ? seeds[0].host : null;
+    this._skipHostnameVerification = skipHostnameVerification;
+
+    if(!this._isEncrypted && this._skipHostnameVerification) {
+      console.warn('Skipping hostname verification for unencrypted clusters will have no effect.');
+    }
+
     this.recycle(tube);
   }
 
@@ -212,7 +229,6 @@ class SocketTubePool {
       // open tube is available, so use it
       this._headTube = tube._nextTube;
       tube._nextTube = null;
-
       if(tube.socket) {
         // remove the idle handler
         tube.socket.removeAllListeners('timeout');
@@ -222,35 +238,59 @@ class SocketTubePool {
         tube._inPool = false;
       }
 
-      if(tube.socket && tube.socket.destroyed) {
-        this.reset(tube);
-      } else {
-        return Promise.resolve(tube);
-      }
+      return Promise.resolve(tube);
+    } else {
+      // no open available tubes, so try to create one
+      let wait = new ControllablePromise(this._connectTimeout, new TimeoutError(this._connectTimeout));
+      this._pendingJob.push(wait);
+      this._alloc(wait);
+      return wait;
     }
-
-    // no open, available tubes, so try to create one
-    let wait = new ControllablePromise(this._connectTimeout, new TimeoutError(this._connectTimeout));
-    this._pendingJob.push(wait);
-    this._alloc();
-    return wait;
   }
 
-  _alloc() {
+  _alloc(wait) {
     // separate this out since we can better unit test with mocking this func out.
     if(this._pendingConnection >= MAX_PENDING_CONNECTION) {
       return null;
     }
 
     this._pendingConnection++;
-    let socket = net.createConnection(this._port, this._hostname, () => {
-      let newTube = new ClientTube(socket, this._sessionVersion, this._credProvider, this._region);
-      this.recycle(newTube);
-      this._pendingConnection--;
-    }).on('error', (err) => {
-      this._pendingConnection--;
-      console.error(err);
-    });
+
+    let connectOps = {
+      port: this._port,
+      host: this._hostname,
+    };
+    if(this._isEncrypted) { // Connecting to encrypted cluster.
+      if(this._skipHostnameVerification) {
+        connectOps = {
+          checkServerIdentity: () => undefined,
+          ...connectOps,
+        };
+      } else {
+        connectOps = {
+          checkServerIdentity: (_, cert) => {
+            return tls.checkServerIdentity(this._endpointHost, cert);
+          },
+          ...connectOps,
+        };
+      }
+      let socket = tls.connect(connectOps, () => this.socketCallback(socket)).on('error', (e) => this.socketError(wait, e));
+    } else { // Connecting to un-encrypted cluster.
+      let socket = net.connect(connectOps, () => this.socketCallback(socket)).on('error', (e) => this.socketError(wait, e));
+    }
+  }
+
+  socketCallback(socket) {
+    let newTube = new ClientTube(socket, this._sessionVersion, this._credProvider, this._region);
+    this.recycle(newTube);
+    this._pendingConnection--;
+  }
+
+  socketError(wait, error) {
+    if(wait && !wait.isDone()) {
+      wait.reject(new DaxClientError(error.message, DaxErrorCode.Connection));
+    }
+    this._pendingConnection--;
   }
 
   recycle(tube) {
@@ -300,13 +340,36 @@ class SocketTubePool {
     if(tube._sessionVersion !== this._sessionVersion) {
       return;
     }
+    this._signalAll(false);
     this._versionBump();
     tube = this._headTube;
     this._headTube = null;
     this._closeAll(tube);
   }
 
+  // Signal pending connect jobs. 'reject' value will indicate whether to
+  // reject directly or allow retry when still within connect timeout.
+  _signalAll(reject) {
+    for(let job of this._pendingJob) {
+      if(!job.isDone()) {
+        if(reject) {
+          job.reject(new DaxClientError('pool is reset or closed', DaxErrorCode.Connection, true));
+        } else {
+          // We should give it another connect try instead of fail this
+          // request as long as it's within connect timeout which is
+          // configurable.
+          this._alloc();
+        }
+      }
+    }
+    // Don't need to clean pending job list here since frequent array slice
+    // is not efficient. If it will be used again, it will be shifted when
+    // recycle method try to find a candidate. Otherwise, it will be
+    // garbage collected.
+  }
+
   close() {
+    this._signalAll(true);
     this._versionBump();
     let tube = this._headTube;
     this._headTube = null;

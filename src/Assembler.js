@@ -121,6 +121,18 @@ class Assembler {
       this._decodeResponseItem(param, result);
     });
 
+    /**
+     * Ideally, this would go into `scan_N1875390620_1` in `generated-src/Operations.js`
+     * Dax doesn't return ConsumedCapacity if the request has been a cache hit, but does return it if it was a cache miss.
+     * If a user has requested for ConsumedCapacity, and our result doesn't provide one, then we default to 0.
+     * It follows similar logic as: https://code.amazon.com/packages/DaxJavaClient/blobs/919d32616b8971c4bf2930aa322aa39a2b38ac13/--/src/com/amazon/dax/client/dynamodbv2/DaxClient.java#L772
+     */
+    if(this._request.ReturnConsumedCapacity != null && this._request.ReturnConsumedCapacity !== 'NONE' && result.ConsumedCapacity == null) {
+      result.ConsumedCapacity = {
+        TableName: this._request.TableName,
+        CapacityUnits: 0,
+      };
+    }
     return result;
   }
 
@@ -555,8 +567,8 @@ class Assembler {
       key[rangeAttrName] = {[rangeAttrType]: rangeValue};
     } else {
       throw new DaxClientError(
-            `Key schema must be of length 1 or 2; got ${keySchema.length} (${keySchema})`,
-            DaxErrorCode.MalformedResult);
+        `Key schema must be of length 1 or 2; got ${keySchema.length} (${keySchema})`,
+        DaxErrorCode.MalformedResult);
     }
 
     return key;
@@ -593,7 +605,6 @@ class Assembler {
 
     return dec.buildMap(_decodeConsumedCapacityEntry);
   }
-
 }
 
 module.exports = Assembler;

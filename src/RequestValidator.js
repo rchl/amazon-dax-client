@@ -169,15 +169,13 @@ module.exports = class RequestValidator {
       return;
     }
 
-    if(attr.S && attr.S.length == 0) {
-      throw RequestValidator.newValidationException('One or more parameter values were invalid: An AttributeValue may not contain an empty string');
-    } else if(attr.SS) {
+    if(attr.SS) {
       if(attr.SS.length == 0) {
         throw RequestValidator.newValidationException('One or more parameter values were invalid: An string set  may not be empty');
       }
       for(let s of attr.SS) {
-        if(!s) {
-          throw RequestValidator.newValidationException('One or more parameter values were invalid: An string set may not have a empty string as a member');
+        if(s == null) {
+          throw RequestValidator.newValidationException('One or more parameter values were invalid: An string set may not have a null string as a member');
         }
       }
     } else if(attr.BS) {
@@ -342,7 +340,7 @@ module.exports = class RequestValidator {
 
     if(condOp) {
       if(!expAttrVals && !queryFilter && !scanFilter) {
-        throw RequestValidator.newValidationExceptionnew('ConditionalOperator cannot be used without Filter or Expected');
+        throw RequestValidator.newValidationException('ConditionalOperator cannot be used without Filter or Expected');
       }
 
       if((expAttrVals && Object.keys(expAttrVals).length <= 1) ||
@@ -365,8 +363,8 @@ module.exports = class RequestValidator {
       return expr.length;
     }
     let length = expr.length;
-    Object.keys(sub).forEach((from) => {
-      let to = sub[from];
+    Object.keys(subs).forEach((from) => {
+      let to = subs[from];
       if(from.length === 0) {
         // this should never happen as 'from' always has prefix '#'.
         // checking the condition to make the code agnostic to other validations.

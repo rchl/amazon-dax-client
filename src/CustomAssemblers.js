@@ -65,7 +65,7 @@ exports.Custom_batchGetItem_N697851100_1_Assembler = class Custom_batchGetItem_N
     let length = this.dec.decodeArrayLength();
     if(length !== 2) {
       throw new DaxClientError('BatchGetResponse needs to have two elements, instead had: ' + arrHeader,
-                               DaxErrorCode.MalformedResult);
+        DaxErrorCode.MalformedResult);
     }
 
     result.Responses = {};
@@ -205,7 +205,7 @@ exports.Custom_transactGetItems_1866287579_1_Assembler = class Custom_transactGe
     let length = this.dec.decodeArrayLength();
     if(length !== 2) {
       throw new DaxClientError('TransactGetResponse needs to have 2 elements, instead had: ' + length,
-                               DaxErrorCode.MalformedResult);
+        DaxErrorCode.MalformedResult);
     }
 
     // Read the items

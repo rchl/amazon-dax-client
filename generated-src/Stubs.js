@@ -38,6 +38,10 @@ exports.write_authorizeConnection_1489122155_1 = function(accessKeyId, signature
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -53,6 +57,10 @@ exports.write_defineAttributeList_670678385_1 = function(attributeListId, tube) 
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -68,6 +76,10 @@ exports.write_defineAttributeListId_N1230579644_1 = function(attributeNames, tub
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -83,6 +95,10 @@ exports.write_defineKeySchema_N742646399_1 = function(tableName, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -108,6 +124,10 @@ exports.write_deleteItem_1013539361_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -121,6 +141,10 @@ exports.write_endpoints_455855874_1 = function(tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -146,6 +170,10 @@ exports.write_getItem_263244906_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -173,6 +201,10 @@ exports.write_putItem_N2106490455_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -204,6 +236,10 @@ exports.write_query_N931250863_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -227,6 +263,10 @@ exports.write_scan_N1875390620_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
@@ -252,6 +292,10 @@ exports.write_updateItem_1425579023_1 = function(request, tube) {
     tube.flush();
   }).catch((err) => {
     tube.close();
+    // For IO exception, make it retryable.
+    if(err && err.code === 'EPIPE') {
+      throw new DaxClientError(err.message, DaxErrorCode.Connection, true);
+    }
     throw err;
   });
 };
