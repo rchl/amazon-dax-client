@@ -18,6 +18,7 @@ const Assembler = require('./Assembler');
 const Util = require('./Util');
 const DaxClientError = require('./DaxClientError');
 const DaxErrorCode = require('./DaxErrorCode');
+const CborDecoder = require('./CborDecoder');
 
 exports.Custom_defineKeySchema_N742646399_1_Assembler = class Custom_defineKeySchema_N742646399_1_Assembler extends Assembler {
   _assembleResult() {
@@ -118,9 +119,16 @@ exports.Custom_batchGetItem_N697851100_1_Assembler = class Custom_batchGetItem_N
       }
     });
 
-    let consumedCapacities = this.dec.buildArray(() => Assembler._decodeConsumedCapacityData(this.dec.decodeCbor()));
-    if(this._request.ReturnConsumedCapacity && this._request.ReturnConsumedCapacity !== 'NONE') {
-      result.ConsumedCapacity = verifyBatchConsumedCapacity(consumedCapacities, Object.getOwnPropertyNames(this._request.RequestItems));
+    try {
+      let consumedCapacities = this.dec.buildArray(() => Assembler._decodeConsumedCapacityData(this.dec.decodeCbor()));
+      if(this._request.ReturnConsumedCapacity && this._request.ReturnConsumedCapacity !== 'NONE') {
+        result.ConsumedCapacity = verifyBatchConsumedCapacity(consumedCapacities, Object.getOwnPropertyNames(this._request.RequestItems));
+      }
+    } catch (error) {
+      // Ignore "Not enough data" error (TW-2013) until upstream provides a proper fix.
+      if (!(error instanceof CborDecoder.NeedMoreData)) {
+        throw error
+      }
     }
 
     return result;
